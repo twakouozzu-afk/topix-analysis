@@ -1,0 +1,12 @@
+# 取得したデータ(リポジトリには含めない)
+data/
+
+# 認証情報
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
