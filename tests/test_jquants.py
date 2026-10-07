@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from topix_analysis.sources.jquants import JQuantsClient, JQuantsError, parse_topix_records
 
@@ -64,10 +65,32 @@ def test_api_key_is_read_from_environment(monkeypatch):
     assert session.calls[0]["params"] == {}
 
 
-def test_missing_api_key_raises(monkeypatch):
+def test_without_api_key_sends_no_header(monkeypatch):
+    """クラウド環境の API credentials ではプロキシがヘッダーを付けるので、自分では付けない。"""
     monkeypatch.delenv("JQUANTS_API_KEY", raising=False)
-    with pytest.raises(JQuantsError, match="JQUANTS_API_KEY"):
-        JQuantsClient()
+    session = FakeSession([FakeResponse(PAGE2)])
+
+    df = JQuantsClient(session=session).fetch_topix()
+
+    assert df["close"].tolist() == [2415.25]
+    assert session.calls[0]["headers"] == {}
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_auth_error_without_api_key_explains_setup(monkeypatch, status):
+    monkeypatch.delenv("JQUANTS_API_KEY", raising=False)
+    session = FakeSession([FakeResponse({"message": "Missing API key"}, status_code=status)])
+    with pytest.raises(JQuantsError, match="API credentials"):
+        JQuantsClient(session=session).fetch_topix()
+
+
+def test_connection_error_raises():
+    class FailingSession:
+        def get(self, *args, **kwargs):
+            raise requests.ConnectionError("proxy refused")
+
+    with pytest.raises(JQuantsError, match="接続に失敗"):
+        JQuantsClient("k", session=FailingSession()).fetch_topix()
 
 
 def test_http_error_raises():

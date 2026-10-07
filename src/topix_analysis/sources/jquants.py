@@ -4,6 +4,11 @@
     GET https://api.jquants.com/v2/indices/bars/daily/topix
     ヘッダー x-api-key にダッシュボードで発行したAPIキーを指定する。
     応答は {"data": [{"Date", "O", "H", "L", "C"}, ...], "pagination_key": ...}
+
+APIキーの渡し方は2通り:
+    - 環境変数 JQUANTS_API_KEY(手元のMacなど)。このクライアントが x-api-key ヘッダーを付ける。
+    - Claude Code クラウド環境の API credentials。キーは環境変数に現れず、
+      プロキシが送信後に x-api-key ヘッダーを付ける。この場合はヘッダーなしで送る。
 """
 
 from __future__ import annotations
@@ -37,12 +42,7 @@ class JQuantsClient:
         session: requests.Session | None = None,
         timeout: float = 30.0,
     ) -> None:
-        api_key = api_key or os.environ.get(API_KEY_ENV)
-        if not api_key:
-            raise JQuantsError(
-                f"APIキーがありません。環境変数 {API_KEY_ENV} に設定してください。"
-            )
-        self._api_key = api_key
+        self._api_key = api_key or os.environ.get(API_KEY_ENV) or None
         self._base_url = base_url.rstrip("/")
         self._session = session or requests.Session()
         self._timeout = timeout
@@ -73,11 +73,20 @@ class JQuantsClient:
             resp = self._session.get(
                 self._base_url + path,
                 params=params,
-                headers={"x-api-key": self._api_key},
+                headers={"x-api-key": self._api_key} if self._api_key else {},
                 timeout=self._timeout,
             )
         except requests.RequestException as exc:
-            raise JQuantsError(f"J-Quants への接続に失敗しました: {exc}") from exc
+            raise JQuantsError(
+                f"J-Quants への接続に失敗しました: {exc}\n"
+                "クラウド環境では api.jquants.com への接続が許可されているか確認してください。"
+            ) from exc
+        if resp.status_code in (401, 403) and not self._api_key:
+            raise JQuantsError(
+                f"J-Quants が認証を拒否しました (HTTP {resp.status_code})。"
+                f"環境変数 {API_KEY_ENV} を設定するか、"
+                "クラウド環境の API credentials に api.jquants.com 用のキーを登録してください。"
+            )
         if resp.status_code != 200:
             raise JQuantsError(
                 f"J-Quants がエラーを返しました (HTTP {resp.status_code}): {resp.text[:200]}"
