@@ -14,12 +14,30 @@ pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-J-Quants から取得する場合は、ダッシュボードで発行した API キーを環境変数に設定します。
-API キーはリポジトリに保存しないでください。
+J-Quants から取得するには、ダッシュボードで発行した API キーが必要です。
+API キーはリポジトリ・チャット・GitHub には保存しないでください。
+
+**手元の Mac で使う場合**:キーをキーチェーンに保存し、使うときだけ環境変数に読み込みます。
 
 ```bash
-export JQUANTS_API_KEY="発行したAPIキー"
+# 1回だけ:キーチェーンに保存(入力したキーは画面に表示されません)
+security add-generic-password -a "$USER" -s jquants-api-key -w
+
+# 使うたびに:キーチェーンから読み込む
+export JQUANTS_API_KEY="$(security find-generic-password -a "$USER" -s jquants-api-key -w)"
 ```
+
+**Claude Code のクラウド環境で使う場合**:環境設定の **API credentials** に登録します
+(Pro / Max プラン)。キーは環境変数に現れず、プロキシが送信時にヘッダーを付けます。
+
+| 項目 | 値 |
+|---|---|
+| Allowed websites | `api.jquants.com` |
+| Custom headers の Name | `x-api-key` |
+| Custom headers の Prefix | 空欄(`Bearer` を消す) |
+| Custom headers の Value | API キー |
+
+`JQUANTS_API_KEY` が未設定のときは x-api-key ヘッダーを付けずに送信し、プロキシに任せます。
 
 ## 使い方
 
